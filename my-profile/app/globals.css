@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #0f172a; /* Dark Navy / Slate 900 */
+  --foreground: #f8fafc;
 }
 
 @theme inline {
@@ -19,27 +19,8 @@ body {
   overflow-x: hidden;
 }
 
-/* Custom Animation Classes for Profile */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  opacity: 0;
-}
-
-.animation-delay-200 {
-  animation-delay: 200ms;
-}
-
-.animation-delay-400 {
-  animation-delay: 400ms;
+/* Neo Brutalism utilities if needed (mostly inline via Tailwind) */
+::selection {
+  background-color: #ff007f;
+  color: #fff;
 }
