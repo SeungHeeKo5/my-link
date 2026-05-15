@@ -43,10 +43,10 @@ interface ProfileData {
 
 // --- Mock Data ---
 const initialProfile: ProfileData = {
-  name: "홍길동",
-  englishName: "Hong Gil Dong",
-  dob: "1990.01.01",
-  about: "안녕하세요! 프론트엔드 개발자 홍길동입니다.\n새로운 기술을 배우고 적용하는 것을 좋아합니다.\n세상을 바꾸는 코드를 작성하는 것이 목표입니다.",
+  name: "고승희",
+  englishName: "Ko Seung Hee",
+  dob: "2004.10.11",
+  about: "안녕하세요! 프론트엔드 개발자 고승희입니다.\n새로운 기술을 배우고 적용하는 것을 좋아합니다.\n세상을 바꾸는 코드를 작성하는 것이 목표입니다.",
   avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
 };
 
