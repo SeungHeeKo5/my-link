@@ -1,19 +1,432 @@
-import { Button } from "@/components/ui/button"
+"use client";
 
-export default function Page() {
+import React, { useState, useEffect } from "react";
+import {
+  Pencil,
+  Plus,
+  Trash2,
+  Eye,
+  Save,
+  ExternalLink,
+  LogOut,
+  LogIn,
+  Link as LinkIcon
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+
+// --- Types ---
+interface LinkItem {
+  id: string;
+  title: string;
+  url: string;
+  clicks: number;
+  isActive: boolean;
+}
+
+interface ProfileData {
+  name: string;
+  englishName: string;
+  dob: string;
+  about: string;
+  avatarUrl: string;
+}
+
+// --- Mock Data ---
+const initialProfile: ProfileData = {
+  name: "홍길동",
+  englishName: "Hong Gil Dong",
+  dob: "1990.01.01",
+  about: "안녕하세요! 프론트엔드 개발자 홍길동입니다.\n새로운 기술을 배우고 적용하는 것을 좋아합니다.\n세상을 바꾸는 코드를 작성하는 것이 목표입니다.",
+  avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
+};
+
+const initialLinks: LinkItem[] = [
+  { id: "1", title: "GitHub", url: "https://github.com", clicks: 125, isActive: true },
+  { id: "2", title: "Tech Blog", url: "https://velog.io", clicks: 42, isActive: true },
+  { id: "3", title: "Portfolio", url: "https://portfolio.com", clicks: 89, isActive: false },
+];
+
+export default function MyLinkApp() {
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isPreview, setIsPreview] = useState(false);
+  const [profile, setProfile] = useState<ProfileData>(initialProfile);
+  const [links, setLinks] = useState<LinkItem[]>(initialLinks);
+
+  // Determine actual view mode
+  const isEditing = isAdmin && !isPreview;
+
   return (
-    <div className="flex min-h-svh p-6">
-      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">
-        <div>
-          <h1 className="font-medium">Project ready!</h1>
-          <p>You may now add components and start building.</p>
-          <p>We&apos;ve already added the button component for you.</p>
-          <Button className="mt-2">Button</Button>
-        </div>
-        <div className="font-mono text-xs text-muted-foreground">
-          (Press <kbd>d</kbd> to toggle dark mode)
+    <div className="min-h-screen bg-background text-foreground font-sans pb-20">
+      {/* Admin Header */}
+      {isAdmin ? (
+        <header className="sticky top-0 z-50 p-4 flex justify-between items-center bg-background/80 backdrop-blur-md border-b">
+          <div className="font-bold text-xl tracking-tight">MyLink Admin</div>
+          <div className="flex gap-2">
+            <Button
+              variant={isPreview ? "default" : "secondary"}
+              onClick={() => setIsPreview(!isPreview)}
+              className="gap-2"
+            >
+              {isPreview ? <Pencil className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {isPreview ? "편집 모드로 돌아가기" : "내 페이지 보기"}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => setIsAdmin(false)}
+              className="gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              로그아웃
+            </Button>
+          </div>
+        </header>
+      ) : (
+        <header className="p-4 flex justify-end">
+          <Button
+            variant="ghost"
+            onClick={() => setIsAdmin(true)}
+            className="gap-2"
+          >
+            <LogIn className="w-4 h-4" />
+            Admin Login
+          </Button>
+        </header>
+      )}
+
+      {/* Main Content */}
+      <main className="max-w-4xl mx-auto p-4 md:p-8 flex flex-col md:flex-row gap-8 mt-4">
+        
+        {/* Left Section - Profile */}
+        <section className="w-full md:w-1/3 flex flex-col gap-6">
+          <Card className="flex flex-col items-center text-center p-6 relative shadow-sm">
+            <Badge variant="secondary" className="absolute top-4 left-4">
+              Hello, I'm
+            </Badge>
+            
+            <div className="relative group mt-8 mb-6">
+              <Avatar className="w-32 h-32 border-2 border-muted">
+                <AvatarImage src={profile.avatarUrl} alt="Avatar" />
+                <AvatarFallback>HG</AvatarFallback>
+              </Avatar>
+              {isEditing && (
+                <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                  <Pencil className="text-white w-6 h-6" />
+                </div>
+              )}
+            </div>
+
+            <InlineEdit
+              value={profile.name}
+              isEditing={isEditing}
+              onSave={(val) => setProfile({ ...profile, name: val })}
+              textClass="text-2xl font-bold mb-1"
+            />
+            
+            <InlineEdit
+              value={profile.englishName}
+              isEditing={isEditing}
+              onSave={(val) => setProfile({ ...profile, englishName: val })}
+              textClass="text-sm text-muted-foreground mb-4"
+            />
+            
+            <InlineEdit
+              value={profile.dob}
+              isEditing={isEditing}
+              onSave={(val) => setProfile({ ...profile, dob: val })}
+              textClass="text-xs text-muted-foreground px-3 py-1 bg-muted rounded-full"
+            />
+          </Card>
+        </section>
+
+        {/* Right Section - Links & About */}
+        <section className="w-full md:w-2/3 flex flex-col gap-6">
+          
+          {/* About Me */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-xl">About Me</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <InlineEdit
+                value={profile.about}
+                isEditing={isEditing}
+                onSave={(val) => setProfile({ ...profile, about: val })}
+                textClass="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap"
+                multiline
+              />
+            </CardContent>
+          </Card>
+
+          {/* Links Area */}
+          <div className="flex flex-col gap-4">
+            {links
+              .filter(link => isEditing || link.isActive)
+              .map(link => (
+              <LinkCard 
+                key={link.id} 
+                link={link} 
+                isEditing={isEditing} 
+                onUpdate={(updated) => setLinks(links.map(l => l.id === updated.id ? updated : l))}
+                onDelete={(id) => setLinks(links.filter(l => l.id !== id))}
+              />
+            ))}
+
+            {isEditing && (
+              <Button 
+                variant="outline"
+                className="w-full h-24 border-dashed border-2 hover:bg-accent text-muted-foreground hover:text-accent-foreground flex items-center justify-center gap-2 text-lg"
+                onClick={() => {
+                  const newLink: LinkItem = {
+                    id: Date.now().toString(),
+                    title: "새로운 링크",
+                    url: "https://",
+                    clicks: 0,
+                    isActive: true,
+                  };
+                  setLinks([...links, newLink]);
+                }}
+              >
+                <Plus className="w-5 h-5" /> 새로운 링크 추가
+              </Button>
+            )}
+          </div>
+
+        </section>
+      </main>
+    </div>
+  );
+}
+
+// --- Sub Components ---
+
+function InlineEdit({ 
+  value, 
+  isEditing, 
+  onSave, 
+  textClass = "", 
+  multiline = false 
+}: { 
+  value: string; 
+  isEditing: boolean; 
+  onSave: (val: string) => void; 
+  textClass?: string;
+  multiline?: boolean;
+}) {
+  const [editMode, setEditMode] = useState(false);
+  const [tempValue, setTempValue] = useState(value);
+
+  useEffect(() => {
+    setTempValue(value);
+  }, [value]);
+
+  if (!isEditing) {
+    return <div className={textClass}>{value}</div>;
+  }
+
+  if (editMode) {
+    return (
+      <div className="flex flex-col gap-2 w-full mt-2">
+        {multiline ? (
+          <textarea
+            value={tempValue}
+            onChange={(e) => setTempValue(e.target.value)}
+            className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+            autoFocus
+          />
+        ) : (
+          <Input
+            type="text"
+            value={tempValue}
+            onChange={(e) => setTempValue(e.target.value)}
+            className="text-center"
+            autoFocus
+          />
+        )}
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" size="sm" onClick={() => {
+              setTempValue(value);
+              setEditMode(false);
+          }}>
+            취소
+          </Button>
+          <Button size="sm" onClick={() => {
+              onSave(tempValue);
+              setEditMode(false);
+          }} className="gap-1">
+            <Save className="w-3.5 h-3.5" /> 저장
+          </Button>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="group relative inline-flex items-center w-full justify-center">
+      <div className={textClass}>{value}</div>
+      <Button
+        variant="ghost" 
+        size="icon"
+        onClick={() => setEditMode(true)}
+        className="absolute -right-8 opacity-0 group-hover:opacity-100 h-6 w-6"
+        title="수정하기"
+      >
+        <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+      </Button>
     </div>
-  )
+  );
+}
+
+function LinkCard({ 
+  link, 
+  isEditing,
+  onUpdate,
+  onDelete
+}: { 
+  link: LinkItem; 
+  isEditing: boolean;
+  onUpdate: (link: LinkItem) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [editMode, setEditMode] = useState(false);
+  const [tempTitle, setTempTitle] = useState(link.title);
+  const [tempUrl, setTempUrl] = useState(link.url);
+
+  // URL에서 도메인 추출 후 구글 파비콘 API 사용
+  const getFaviconUrl = (url: string) => {
+    try {
+      const domain = new URL(url).hostname;
+      return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+    } catch {
+      return null;
+    }
+  };
+
+  const favicon = getFaviconUrl(link.url);
+
+  if (isEditing) {
+    return (
+      <Card className={`relative shadow-sm transition-all ${!link.isActive ? 'opacity-60 bg-muted/50' : ''}`}>
+        <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          
+          {/* Favicon Area */}
+          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden border">
+            {favicon ? <img src={favicon} alt="icon" className="w-6 h-6 object-contain" /> : <LinkIcon className="w-5 h-5 text-muted-foreground" />}
+          </div>
+
+          {/* Edit Form or View */}
+          <div className="flex-grow w-full">
+            {editMode ? (
+              <div className="flex flex-col gap-3">
+                <Input 
+                  value={tempTitle}
+                  onChange={(e) => setTempTitle(e.target.value)}
+                  placeholder="링크 제목"
+                  className="font-medium"
+                />
+                <Input 
+                  type="url" 
+                  value={tempUrl}
+                  onChange={(e) => setTempUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="text-sm font-mono"
+                />
+                <div className="flex gap-2 mt-1">
+                  <Button 
+                    variant="outline" size="sm"
+                    onClick={() => setEditMode(false)}
+                  >취소</Button>
+                  <Button 
+                    size="sm"
+                    onClick={() => {
+                      onUpdate({ ...link, title: tempTitle, url: tempUrl });
+                      setEditMode(false);
+                    }}
+                    className="gap-1"
+                  ><Save className="w-3.5 h-3.5"/> 저장</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="group relative pr-8 w-fit min-w-[200px]">
+                <div className="font-semibold text-lg">{link.title}</div>
+                <div className="text-sm text-muted-foreground truncate font-mono mt-0.5 max-w-[200px] sm:max-w-[300px]">{link.url}</div>
+                <Button 
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setTempTitle(link.title);
+                    setTempUrl(link.url);
+                    setEditMode(true);
+                  }}
+                  className="absolute -right-10 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-8 w-8"
+                ><Pencil className="w-4 h-4 text-muted-foreground" /></Button>
+              </div>
+            )}
+          </div>
+
+          {/* Actions (Stats, Toggle, Delete) */}
+          {!editMode && (
+            <div className="flex flex-row items-center gap-4 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 pt-4 sm:pt-0 mt-2 sm:mt-0">
+              <div className="flex flex-col items-center px-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Clicks</span>
+                <span className="text-sm font-bold">{link.clicks}</span>
+              </div>
+              
+              <div className="flex items-center gap-2" title={link.isActive ? "비공개로 전환" : "공개로 전환"}>
+                <Switch 
+                  checked={link.isActive}
+                  onCheckedChange={(checked) => onUpdate({ ...link, isActive: checked })}
+                />
+              </div>
+
+              <Button 
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  if(window.confirm("정말 삭제하시겠습니까?")) {
+                    onDelete(link.id);
+                  }
+                }}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                title="삭제"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Visitor View
+  return (
+    <a 
+      href={link.url} 
+      target="_blank" 
+      rel="noopener noreferrer"
+      className="group block"
+      onClick={() => {
+        console.log(`Link clicked: ${link.id}`);
+      }}
+    >
+      <Card className="hover:border-primary/50 hover:bg-accent/50 transition-colors shadow-sm">
+        <CardContent className="p-4 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden border">
+            {favicon ? <img src={favicon} alt="icon" className="w-6 h-6 object-contain" /> : <LinkIcon className="w-5 h-5 text-muted-foreground" />}
+          </div>
+          <div className="flex-grow">
+            <div className="font-semibold text-lg group-hover:text-primary transition-colors">{link.title}</div>
+          </div>
+          <div className="text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all">
+            <ExternalLink className="w-5 h-5" />
+          </div>
+        </CardContent>
+      </Card>
+    </a>
+  );
 }
