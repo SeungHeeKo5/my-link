@@ -10,8 +10,12 @@ import {
   ExternalLink,
   LogOut,
   LogIn,
-  Link as LinkIcon
+  Link as LinkIcon,
+  BookOpen,
+  Briefcase
 } from "lucide-react";
+import { FaInstagram, FaYoutube, FaGithub } from "react-icons/fa";
+import { dummyLinks } from "@/data/links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -24,6 +28,7 @@ interface LinkItem {
   id: string;
   title: string;
   url: string;
+  icon: string;
   clicks: number;
   isActive: boolean;
 }
@@ -45,11 +50,11 @@ const initialProfile: ProfileData = {
   avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
 };
 
-const initialLinks: LinkItem[] = [
-  { id: "1", title: "GitHub", url: "https://github.com", clicks: 125, isActive: true },
-  { id: "2", title: "Tech Blog", url: "https://velog.io", clicks: 42, isActive: true },
-  { id: "3", title: "Portfolio", url: "https://portfolio.com", clicks: 89, isActive: false },
-];
+const initialLinks: LinkItem[] = dummyLinks.map(link => ({
+  ...link,
+  clicks: Math.floor(Math.random() * 100),
+  isActive: true,
+}));
 
 export default function MyLinkApp() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -185,6 +190,7 @@ export default function MyLinkApp() {
                     id: Date.now().toString(),
                     title: "새로운 링크",
                     url: "https://",
+                    icon: "LinkIcon",
                     clicks: 0,
                     isActive: true,
                   };
@@ -296,26 +302,23 @@ function LinkCard({
   const [tempTitle, setTempTitle] = useState(link.title);
   const [tempUrl, setTempUrl] = useState(link.url);
 
-  // URL에서 도메인 추출 후 구글 파비콘 API 사용
-  const getFaviconUrl = (url: string) => {
-    try {
-      const domain = new URL(url).hostname;
-      return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-    } catch {
-      return null;
-    }
+  const IconMap: Record<string, React.ElementType> = {
+    Instagram: FaInstagram,
+    Youtube: FaYoutube,
+    BookOpen,
+    Github: FaGithub,
+    Briefcase,
   };
-
-  const favicon = getFaviconUrl(link.url);
+  const IconComponent = IconMap[link.icon] || LinkIcon;
 
   if (isEditing) {
     return (
       <Card className={`relative shadow-sm transition-all ${!link.isActive ? 'opacity-60 bg-muted/50' : ''}`}>
         <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
           
-          {/* Favicon Area */}
+          {/* Icon Area */}
           <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden border">
-            {favicon ? <img src={favicon} alt="icon" className="w-6 h-6 object-contain" /> : <LinkIcon className="w-5 h-5 text-muted-foreground" />}
+            <IconComponent className="w-6 h-6 text-muted-foreground" />
           </div>
 
           {/* Edit Form or View */}
@@ -417,7 +420,7 @@ function LinkCard({
       <Card className="hover:border-primary/50 hover:bg-accent/50 transition-colors shadow-sm">
         <CardContent className="p-4 flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden border">
-            {favicon ? <img src={favicon} alt="icon" className="w-6 h-6 object-contain" /> : <LinkIcon className="w-5 h-5 text-muted-foreground" />}
+            <IconComponent className="w-6 h-6 text-muted-foreground" />
           </div>
           <div className="flex-grow">
             <div className="font-semibold text-lg group-hover:text-primary transition-colors">{link.title}</div>
