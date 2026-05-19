@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect } from "react";
 import { Link as LinkIcon, Plus, Trash2, ExternalLink, ArrowLeft, Globe } from "lucide-react";
-import { dummyLinks, LinkItemData } from "@/data/links";
+import { LinkItemData } from "@/data/links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import Link from "next/link";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, deleteDoc, doc } from "firebase/firestore";
 
 export default function MyPage() {
   const [links, setLinks] = useState<LinkItemData[]>([]);
@@ -17,29 +19,29 @@ export default function MyPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // 하이드레이션 오류 방지를 위한 Mounted 처리 및 로컬 스토리지 데이터 로드
+  // Firestore realtime listener
   useEffect(() => {
     setIsMounted(true);
-    const savedLinks = localStorage.getItem("mypage-links");
-    if (savedLinks) {
-      try {
-        setLinks(JSON.parse(savedLinks));
-      } catch (e) {
-        setLinks(dummyLinks);
-      }
-    } else {
-      setLinks(dummyLinks);
-    }
+    
+    const linksRef = collection(db, "users", "anonymous", "links");
+    const q = query(linksRef, orderBy("createdAt", "desc"));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedLinks: LinkItemData[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        title: doc.data().title,
+        url: doc.data().url,
+        icon: doc.data().icon || "LinkIcon",
+      }));
+      setLinks(fetchedLinks);
+    }, (error) => {
+      console.error("Error fetching links:", error);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  // 링크가 변할 때마다 로컬 스토리지에 저장
-  useEffect(() => {
-    if (isMounted) {
-      localStorage.setItem("mypage-links", JSON.stringify(links));
-    }
-  }, [links, isMounted]);
-
-  const handleAddLink = (e: React.FormEvent) => {
+  const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -64,22 +66,33 @@ export default function MyPage() {
 
     const finalUrl = trimmedUrl.startsWith("http") ? trimmedUrl : `https://${trimmedUrl}`;
 
-    const newLink: LinkItemData = {
-      id: `link-${Date.now()}`,
-      title: trimmedTitle,
-      url: finalUrl,
-      icon: "LinkIcon",
-    };
+    try {
+      const linksRef = collection(db, "users", "anonymous", "links");
+      await addDoc(linksRef, {
+        title: trimmedTitle,
+        url: finalUrl,
+        icon: "LinkIcon",
+        createdAt: serverTimestamp(),
+        updateAt: serverTimestamp(),
+      });
 
-    setLinks([...links, newLink]); // 요구사항: 하단 목록에 추가됨
-    setTitle("");
-    setUrl("");
-    setIsDialogOpen(false);
+      setTitle("");
+      setUrl("");
+      setIsDialogOpen(false);
+    } catch (err) {
+      console.error("Error adding link: ", err);
+      setError("링크를 추가하는 데 실패했습니다.");
+    }
   };
 
-  const handleDeleteLink = (id: string) => {
+  const handleDeleteLink = async (id: string) => {
     if (window.confirm("정말 이 링크를 삭제하시겠습니까?")) {
-      setLinks(links.filter((link) => link.id !== id));
+      try {
+        await deleteDoc(doc(db, "users", "anonymous", "links", id));
+      } catch (err) {
+        console.error("Error deleting link:", err);
+        alert("링크 삭제에 실패했습니다.");
+      }
     }
   };
 

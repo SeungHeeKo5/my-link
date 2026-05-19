@@ -17,7 +17,6 @@ import {
   Briefcase
 } from "lucide-react";
 import { FaInstagram, FaYoutube, FaGithub } from "react-icons/fa";
-import { dummyLinks } from "@/data/links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -29,6 +28,9 @@ import Link from "next/link";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { useEffect } from "react";
 
 const linkFormSchema = z.object({
   title: z.string().min(1, { message: "제목은 필수 입력입니다." }),
@@ -62,17 +64,37 @@ const initialProfile: ProfileData = {
   avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
 };
 
-const initialLinks: LinkItem[] = dummyLinks.map(link => ({
-  ...link,
-  clicks: Math.floor(Math.random() * 100),
-  isActive: true,
-}));
+
 
 export default function MyLinkApp() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPreview, setIsPreview] = useState(false);
   const [profile, setProfile] = useState<ProfileData>(initialProfile);
-  const [links, setLinks] = useState<LinkItem[]>(initialLinks);
+  const [links, setLinks] = useState<LinkItem[]>([]);
+
+  useEffect(() => {
+    const linksRef = collection(db, "users", "anonymous", "links");
+    const q = query(linksRef, orderBy("createdAt", "desc"));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedLinks: LinkItem[] = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          title: data.title,
+          url: data.url,
+          icon: data.icon || "LinkIcon",
+          clicks: data.clicks || 0,
+          isActive: data.isActive !== undefined ? data.isActive : true,
+        };
+      });
+      setLinks(fetchedLinks);
+    }, (error) => {
+      console.error("Error fetching links:", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // --- Add Link Modal State ---
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -94,21 +116,25 @@ export default function MyLinkApp() {
     }
   };
 
-  const onSubmitForm = (data: z.infer<typeof linkFormSchema>) => {
+  const onSubmitForm = async (data: z.infer<typeof linkFormSchema>) => {
     const finalUrl = data.url.startsWith('http') ? data.url : `https://${data.url}`;
 
-    const newLink = {
-      id: Date.now().toString(),
-      title: data.title.trim(),
-      url: finalUrl,
-      icon: "LinkIcon",
-      clicks: 0,
-      isActive: true,
-    };
-
-    setLinks([newLink, ...links]);
-    reset();
-    setIsDialogOpen(false);
+    try {
+      const linksRef = collection(db, "users", "anonymous", "links");
+      await addDoc(linksRef, {
+        title: data.title.trim(),
+        url: finalUrl,
+        icon: "LinkIcon",
+        clicks: 0,
+        isActive: true,
+        createdAt: serverTimestamp(),
+        updateAt: serverTimestamp(),
+      });
+      reset();
+      setIsDialogOpen(false);
+    } catch (err) {
+      console.error("Error adding link: ", err);
+    }
   };
 
   const isEditing = isAdmin && !isPreview;
@@ -281,8 +307,22 @@ export default function MyLinkApp() {
               key={link.id} 
               link={link} 
               isEditing={isEditing} 
-              onUpdate={(updated) => setLinks(links.map(l => l.id === updated.id ? updated : l))}
-              onDelete={(id) => setLinks(links.filter(l => l.id !== id))}
+              onUpdate={async (updated) => {
+                try {
+                  const linkRef = doc(db, "users", "anonymous", "links", updated.id);
+                  await updateDoc(linkRef, {
+                    title: updated.title,
+                    url: updated.url,
+                    isActive: updated.isActive,
+                    updateAt: serverTimestamp()
+                  });
+                } catch(err) { console.error(err); }
+              }}
+              onDelete={async (id) => {
+                try {
+                  await deleteDoc(doc(db, "users", "anonymous", "links", id));
+                } catch(err) { console.error(err); }
+              }}
             />
           ))}
         </section>
