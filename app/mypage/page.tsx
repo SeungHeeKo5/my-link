@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Link as LinkIcon, Plus, Trash2, ExternalLink, ArrowLeft, Globe } from "lucide-react";
+import { Link as LinkIcon, Plus, Trash2, ExternalLink, ArrowLeft, Globe, Loader2, Pencil } from "lucide-react";
 import { LinkItemData } from "@/data/links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,143 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, deleteDoc, doc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, deleteDoc, doc, updateDoc } from "firebase/firestore";
+
+function LinkCardItem({ linkItem, onDelete }: { linkItem: LinkItemData; onDelete: (id: string, title: string) => void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(linkItem.title);
+  const [editUrl, setEditUrl] = useState(linkItem.url);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSave = async () => {
+    setError("");
+    const trimmedTitle = editTitle.trim();
+    const trimmedUrl = editUrl.trim();
+
+    if (!trimmedTitle) {
+      setError("제목을 입력해주세요.");
+      return;
+    }
+    if (!trimmedUrl) {
+      setError("주소(URL)를 입력해주세요.");
+      return;
+    }
+
+    const urlPattern = /^(https?:\/\/)?([\w\d-]+\.)+[\w\d]{2,}(\/.*)?$/i;
+    if (!urlPattern.test(trimmedUrl)) {
+      setError("올바른 주소 형식을 입력해주세요. (예: example.com)");
+      return;
+    }
+
+    setIsUpdating(true);
+    const finalUrl = trimmedUrl.startsWith("http") ? trimmedUrl : `https://${trimmedUrl}`;
+
+    try {
+      const linkRef = doc(db, "users", "anonymous", "links", linkItem.id);
+      await updateDoc(linkRef, {
+        title: trimmedTitle,
+        url: finalUrl,
+        updateAt: serverTimestamp(),
+      });
+      setIsEditing(false);
+    } catch (err) {
+      console.error("Error updating link:", err);
+      setError("수정에 실패했습니다.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditTitle(linkItem.title);
+    setEditUrl(linkItem.url);
+    setIsEditing(false);
+    setError("");
+  };
+
+  return (
+    <Card className="group border border-slate-200/60 dark:border-zinc-850 bg-card hover:shadow-sm hover:-translate-y-0.5 hover:border-slate-300/80 dark:hover:border-zinc-750 transition-all duration-200">
+      <CardContent className="p-3.5 flex flex-col gap-2">
+        {isEditing ? (
+          <div className="flex flex-col gap-3 w-full py-1">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">링크 제목</label>
+              <Input 
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="예: 나의 인스타그램"
+                className="h-9 text-sm focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7]"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">주소 (URL)</label>
+              <Input 
+                value={editUrl}
+                onChange={(e) => setEditUrl(e.target.value)}
+                placeholder="https://example.com"
+                className="h-9 text-sm font-mono focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7]"
+              />
+            </div>
+            {error && <p className="text-xs text-destructive font-medium">{error}</p>}
+            <div className="flex items-center gap-2 mt-1 justify-end">
+              <Button variant="outline" size="sm" onClick={handleCancel} disabled={isUpdating}>
+                취소
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={isUpdating} className="bg-[#5b5fc7] hover:bg-[#4c50ab] text-white">
+                {isUpdating && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+                저장
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="w-9 h-9 bg-slate-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center shrink-0 border border-slate-200/30 dark:border-zinc-700">
+                <LinkIcon className="w-4.5 h-4.5 text-[#5b5fc7]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200 truncate leading-tight">
+                  {linkItem.title}
+                </h3>
+                <a 
+                  href={linkItem.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-xs text-muted-foreground/90 font-mono hover:text-[#5b5fc7] hover:underline flex items-center gap-1 mt-0.5 truncate"
+                >
+                  <span className="truncate">{linkItem.url}</span>
+                  <ExternalLink className="w-3 h-3 shrink-0" />
+                </a>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-1 shrink-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsEditing(true)}
+                className="text-muted-foreground hover:text-[#5b5fc7] hover:bg-[#5b5fc7]/10 rounded-md shrink-0 h-8 w-8 transition-colors"
+                title="수정하기"
+              >
+                <Pencil className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onDelete(linkItem.id, linkItem.title)}
+                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md shrink-0 h-8 w-8 transition-colors"
+                title="삭제하기"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function MyPage() {
   const [links, setLinks] = useState<LinkItemData[]>([]);
@@ -18,6 +154,12 @@ export default function MyPage() {
   const [error, setError] = useState("");
   const [isMounted, setIsMounted] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [linkToDelete, setLinkToDelete] = useState<{ id: string, title: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Firestore realtime listener
   useEffect(() => {
@@ -57,13 +199,13 @@ export default function MyPage() {
       return;
     }
 
-    // 간단한 URL 유효성 검사
     const urlPattern = /^(https?:\/\/)?([\w\d-]+\.)+[\w\d]{2,}(\/.*)?$/i;
     if (!urlPattern.test(trimmedUrl)) {
       setError("올바른 주소 형식을 입력해주세요. (예: example.com)");
       return;
     }
 
+    setIsSubmitting(true);
     const finalUrl = trimmedUrl.startsWith("http") ? trimmedUrl : `https://${trimmedUrl}`;
 
     try {
@@ -82,17 +224,28 @@ export default function MyPage() {
     } catch (err) {
       console.error("Error adding link: ", err);
       setError("링크를 추가하는 데 실패했습니다.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleDeleteLink = async (id: string) => {
-    if (window.confirm("정말 이 링크를 삭제하시겠습니까?")) {
-      try {
-        await deleteDoc(doc(db, "users", "anonymous", "links", id));
-      } catch (err) {
-        console.error("Error deleting link:", err);
-        alert("링크 삭제에 실패했습니다.");
-      }
+  const requestDelete = (id: string, title: string) => {
+    setLinkToDelete({ id, title });
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!linkToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(db, "users", "anonymous", "links", linkToDelete.id));
+      setDeleteModalOpen(false);
+      setLinkToDelete(null);
+    } catch (err) {
+      console.error("Error deleting link:", err);
+      alert("링크 삭제에 실패했습니다.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -147,8 +300,6 @@ export default function MyPage() {
                 </DialogTitle>
               </DialogHeader>
               <form onSubmit={handleAddLink} className="flex flex-col gap-4 py-2">
-                
-                {/* 제목 입력 칸 (세로 배치) */}
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="title" className="text-sm font-semibold text-slate-700 dark:text-zinc-300">
                     링크 제목
@@ -165,8 +316,6 @@ export default function MyPage() {
                     className="focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7]"
                   />
                 </div>
-
-                {/* 주소 입력 칸 (세로 배치) */}
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="url" className="text-sm font-semibold text-slate-700 dark:text-zinc-300">
                     주소 (URL)
@@ -183,22 +332,19 @@ export default function MyPage() {
                     className="focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7]"
                   />
                 </div>
-
                 {error && (
                   <p className="text-xs font-medium text-destructive mt-0.5">
                     {error}
                   </p>
                 )}
-
-                {/* 추가 버튼 (보라색 #5b5fc7) */}
                 <Button 
                   type="submit" 
+                  disabled={isSubmitting}
                   className="w-full bg-[#5b5fc7] hover:bg-[#4c50ab] active:scale-[0.98] text-white font-semibold py-2.5 rounded-lg shadow-sm transition-all flex items-center justify-center gap-1.5 mt-2"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>링크 추가하기</span>
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  <span>{isSubmitting ? "추가 중..." : "링크 추가하기"}</span>
                 </Button>
-
               </form>
             </DialogContent>
           </Dialog>
@@ -222,48 +368,58 @@ export default function MyPage() {
           ) : (
             <div className="flex flex-col gap-2.5">
               {links.map((linkItem) => (
-                <Card 
+                <LinkCardItem 
                   key={linkItem.id} 
-                  className="group border border-slate-200/60 dark:border-zinc-850 bg-card hover:shadow-sm hover:-translate-y-0.5 hover:border-slate-300/80 dark:hover:border-zinc-750 transition-all duration-200"
-                >
-                  <CardContent className="p-3.5 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 bg-slate-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center shrink-0 border border-slate-200/30 dark:border-zinc-700">
-                        <LinkIcon className="w-4.5 h-4.5 text-[#5b5fc7]" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200 truncate leading-tight">
-                          {linkItem.title}
-                        </h3>
-                        <a 
-                          href={linkItem.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="text-xs text-muted-foreground/90 font-mono hover:text-[#5b5fc7] hover:underline flex items-center gap-1 mt-0.5 truncate"
-                        >
-                          <span className="truncate">{linkItem.url}</span>
-                          <ExternalLink className="w-3 h-3 shrink-0" />
-                        </a>
-                      </div>
-                    </div>
-                    
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteLink(linkItem.id)}
-                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/5 dark:hover:bg-destructive/10 rounded-md shrink-0 h-8 w-8 transition-colors"
-                      title="삭제하기"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </CardContent>
-                </Card>
+                  linkItem={linkItem} 
+                  onDelete={requestDelete} 
+                />
               ))}
             </div>
           )}
         </section>
-
       </main>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-center text-lg font-bold">
+              정말 삭제하시겠습니까?
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex flex-col items-center justify-center gap-3 py-4 text-center">
+            {linkToDelete && (
+              <div className="bg-slate-100 dark:bg-zinc-800 px-4 py-2 rounded-md w-full border border-slate-200 dark:border-zinc-700">
+                <span className="font-semibold text-sm">{linkToDelete.title}</span>
+              </div>
+            )}
+            <p className="text-destructive font-bold text-sm mt-2">
+              경고 : 이 작업은 되돌릴 수 없습니다.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 w-full mt-2">
+            <Button 
+              variant="outline" 
+              className="w-full flex-1" 
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={isDeleting}
+            >
+              취소
+            </Button>
+            <Button 
+              variant="destructive" 
+              className="w-full flex-1"
+              onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+              삭제하기
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
