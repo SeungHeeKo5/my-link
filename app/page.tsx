@@ -91,6 +91,32 @@ export default function MyLinkApp() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // --- Delete Modal State ---
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [linkToDelete, setLinkToDelete] = useState<{ id: string, title: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const requestDelete = (id: string, title: string) => {
+    setLinkToDelete({ id, title });
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!linkToDelete) return;
+    setIsDeleting(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay for loading UI
+      await deleteDoc(doc(db, "users", "anonymous", "links", linkToDelete.id));
+      setDeleteModalOpen(false);
+      setLinkToDelete(null);
+    } catch (err) {
+      console.error(err);
+      alert("링크 삭제에 실패했습니다.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const {
     register,
     handleSubmit,
@@ -113,6 +139,7 @@ export default function MyLinkApp() {
     const finalUrl = data.url.startsWith('http') ? data.url : `https://${data.url}`;
 
     try {
+      await new Promise(resolve => setTimeout(resolve, 500));
       const linksRef = collection(db, "users", "anonymous", "links");
       await addDoc(linksRef, {
         title: data.title.trim(),
@@ -184,26 +211,38 @@ export default function MyLinkApp() {
 
               <InlineEdit
                 value={profile.name}
-                onSave={(val) => setProfile({ ...profile, name: val })}
+                onSave={async (val) => {
+                  await new Promise(resolve => setTimeout(resolve, 400));
+                  setProfile(prev => ({ ...prev, name: val }));
+                }}
                 textClass="text-2xl font-bold tracking-tight mb-1"
               />
               
               <InlineEdit
                 value={profile.englishName}
-                onSave={(val) => setProfile({ ...profile, englishName: val })}
+                onSave={async (val) => {
+                  await new Promise(resolve => setTimeout(resolve, 400));
+                  setProfile(prev => ({ ...prev, englishName: val }));
+                }}
                 textClass="text-sm text-muted-foreground mb-3"
               />
               
               <InlineEdit
                 value={profile.dob}
-                onSave={(val) => setProfile({ ...profile, dob: val })}
+                onSave={async (val) => {
+                  await new Promise(resolve => setTimeout(resolve, 400));
+                  setProfile(prev => ({ ...prev, dob: val }));
+                }}
                 textClass="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded-md mb-6"
               />
 
               <div className="w-full">
                 <InlineEdit
                   value={profile.about}
-                  onSave={(val) => setProfile({ ...profile, about: val })}
+                  onSave={async (val) => {
+                    await new Promise(resolve => setTimeout(resolve, 400));
+                    setProfile(prev => ({ ...prev, about: val }));
+                  }}
                   textClass="text-sm leading-relaxed text-foreground whitespace-pre-wrap text-center"
                   multiline
                 />
@@ -214,49 +253,42 @@ export default function MyLinkApp() {
 
         {/* Top Add Link Button (Moved Below Profile) */}
         <section className="w-full flex justify-center z-10 relative">
-          <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
-            <DialogTrigger className="w-full h-12 bg-[#5b5fc7]/10 hover:bg-[#5b5fc7]/20 text-[#5b5fc7] border border-[#5b5fc7]/30 border-dashed rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
-              <Plus className="w-5 h-5" />
-              <span className="font-semibold">새로운 링크 추가하기</span>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="text-center text-lg font-bold text-slate-800 dark:text-slate-100">
-                  새로운 링크 정보 입력
-                </DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit(onSubmitForm)} className="flex flex-col gap-4 py-2">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="title" className="text-sm font-semibold text-slate-700 dark:text-zinc-300">링크 제목</label>
+          {isDialogOpen ? (
+            <Card className="w-full border bg-card shadow-sm">
+              <CardContent className="p-4 flex flex-col gap-2">
+                <form onSubmit={handleSubmit(onSubmitForm)} className="flex flex-col gap-2">
                   <Input
-                    id="title"
                     placeholder="예: 나의 인스타그램, 개인 블로그 등"
                     {...register("title")}
-                    className={`focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7] ${errors.title ? 'border-destructive' : ''}`}
+                    className={`font-medium text-center focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7] ${errors.title ? 'border-destructive' : ''}`}
+                    autoFocus
                   />
-                  {errors.title && (
-                    <p className="text-xs text-destructive font-medium mt-0.5">{errors.title.message}</p>
-                  )}
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="url" className="text-sm font-semibold text-slate-700 dark:text-zinc-300">주소(URL)</label>
                   <Input
-                    id="url"
                     placeholder="https://example.com"
                     {...register("url")}
-                    className={`focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7] ${errors.url ? 'border-destructive' : ''}`}
+                    className={`text-xs font-mono text-center focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7] ${errors.url ? 'border-destructive' : ''}`}
                   />
-                  {errors.url && (
-                    <p className="text-xs text-destructive font-medium mt-0.5">{errors.url.message}</p>
-                  )}
-                </div>
-                <Button type="submit" disabled={isSubmitting} className="mt-2 w-full bg-[#5b5fc7] hover:bg-[#4c50ab] active:scale-[0.98] text-white font-semibold flex items-center justify-center gap-1.5 transition-all">
-                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  <span>{isSubmitting ? "추가 중..." : "링크 추가하기"}</span>
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <div className="flex gap-2 justify-center mt-1">
+                    <Button type="button" variant="outline" size="sm" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
+                      취소
+                    </Button>
+                    <Button type="submit" size="sm" disabled={isSubmitting} className="bg-[#5b5fc7] hover:bg-[#4c50ab] text-white">
+                      {isSubmitting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+                      {isSubmitting ? "추가 중" : "추가하기"}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          ) : (
+            <button 
+              onClick={() => handleOpenChange(true)}
+              className="w-full h-12 bg-[#5b5fc7]/10 hover:bg-[#5b5fc7]/20 text-[#5b5fc7] border border-[#5b5fc7]/30 border-dashed rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="font-semibold">새로운 링크 추가하기</span>
+            </button>
+          )}
         </section>
 
         {/* Links Area */}
@@ -275,17 +307,53 @@ export default function MyLinkApp() {
                   });
                 } catch(err) { console.error(err); }
               }}
-              onDelete={async (id) => {
-                if(window.confirm("정말 삭제하시겠습니까?")) {
-                  try {
-                    await deleteDoc(doc(db, "users", "anonymous", "links", id));
-                  } catch(err) { console.error(err); }
-                }
-              }}
+              onDelete={requestDelete}
             />
           ))}
         </section>
       </main>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-center text-lg font-bold">
+              정말 삭제하시겠습니까?
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex flex-col items-center justify-center gap-3 py-4 text-center">
+            {linkToDelete && (
+              <p className="text-sm text-foreground">
+                <span className="font-bold">{linkToDelete.title}</span> 링크를 삭제 합니다.
+              </p>
+            )}
+            <p className="text-destructive font-bold text-sm mt-1">
+              이 작업은 되돌릴 수 없습니다.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 w-full mt-2">
+            <Button 
+              variant="outline" 
+              className="w-full flex-1" 
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={isDeleting}
+            >
+              취소
+            </Button>
+            <Button 
+              variant="destructive" 
+              className="w-full flex-1"
+              onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+              삭제하기
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -299,44 +367,75 @@ function InlineEdit({
   multiline = false 
 }: { 
   value: string; 
-  onSave: (val: string) => void; 
+  onSave: (val: string) => void | Promise<void>; 
   textClass?: string;
   multiline?: boolean;
 }) {
   const [editMode, setEditMode] = useState(false);
   const [tempValue, setTempValue] = useState(value);
+  const [isSaving, setIsSaving] = useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  const handleSaveAction = async () => {
+    setIsSaving(true);
+    await onSave(tempValue);
+    setIsSaving(false);
+    setEditMode(false);
+  };
+
+  React.useEffect(() => {
+    const handleClickOutside = async (event: MouseEvent) => {
+      if (editMode && !isSaving && containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        await handleSaveAction();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [editMode, isSaving, tempValue, onSave]);
 
   if (editMode) {
     return (
-      <div className="flex flex-col gap-2 w-full mt-1 relative z-20">
+      <div ref={containerRef} className="flex flex-col gap-2 w-full mt-1 relative z-20">
         {multiline ? (
-          <textarea
-            value={tempValue}
-            onChange={(e) => setTempValue(e.target.value)}
-            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y text-center"
-            autoFocus
-          />
-        ) : (
-          <Input
-            type="text"
-            value={tempValue}
-            onChange={(e) => setTempValue(e.target.value)}
-            className="text-center"
-            autoFocus
-          />
+            <textarea
+              value={tempValue}
+              onChange={(e) => setTempValue(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  await handleSaveAction();
+                }
+              }}
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y text-center"
+              autoFocus
+              disabled={isSaving}
+            />
+          ) : (
+            <Input
+              type="text"
+              value={tempValue}
+              onChange={(e) => setTempValue(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  await handleSaveAction();
+                }
+              }}
+              className="text-center"
+              autoFocus
+              disabled={isSaving}
+            />
         )}
         <div className="flex gap-2 justify-center mt-1">
           <Button variant="outline" size="sm" onClick={() => {
               setTempValue(value);
               setEditMode(false);
-          }}>
+          }} disabled={isSaving}>
             취소
           </Button>
-          <Button size="sm" onClick={() => {
-              onSave(tempValue);
-              setEditMode(false);
-          }}>
-            <Save className="w-3.5 h-3.5 mr-1.5" /> 저장
+          <Button size="sm" onClick={handleSaveAction} disabled={isSaving}>
+            {isSaving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} 
+            {isSaving ? "저장 중" : "저장"}
           </Button>
         </div>
       </div>
@@ -369,13 +468,26 @@ function LinkCard({
 }: { 
   link: LinkItem; 
   onUpdate: (link: LinkItem) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
+  onDelete: (id: string, title: string) => void;
 }) {
   const [editMode, setEditMode] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [tempTitle, setTempTitle] = useState(link.title);
   const [tempUrl, setTempUrl] = useState(link.url);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = async (event: MouseEvent) => {
+      if (editMode && !isUpdating && containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsUpdating(true);
+        await onUpdate({ ...link, title: tempTitle, url: tempUrl });
+        setIsUpdating(false);
+        setEditMode(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [editMode, isUpdating, tempTitle, tempUrl, link, onUpdate]);
 
   const IconMap: Record<string, React.ElementType> = {
     Instagram: FaInstagram,
@@ -390,10 +502,19 @@ function LinkCard({
     <Card className="group relative shadow-sm transition-opacity w-full border bg-card hover:border-slate-300 dark:hover:border-zinc-700">
       <CardContent className="p-4 flex flex-col gap-4">
         {editMode ? (
-          <div className="flex flex-col gap-2">
+          <div ref={containerRef} className="flex flex-col gap-2">
             <Input 
               value={tempTitle}
               onChange={(e) => setTempTitle(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setIsUpdating(true);
+                  await onUpdate({ ...link, title: tempTitle, url: tempUrl });
+                  setIsUpdating(false);
+                  setEditMode(false);
+                }
+              }}
               placeholder="링크 제목"
               className="font-medium text-center"
             />
@@ -401,6 +522,15 @@ function LinkCard({
               type="url" 
               value={tempUrl}
               onChange={(e) => setTempUrl(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setIsUpdating(true);
+                  await onUpdate({ ...link, title: tempTitle, url: tempUrl });
+                  setIsUpdating(false);
+                  setEditMode(false);
+                }
+              }}
               placeholder="https://..."
               className="text-xs font-mono text-center"
             />
@@ -454,18 +584,11 @@ function LinkCard({
               <Button 
                 variant="ghost"
                 size="icon"
-                disabled={isDeleting}
-                onClick={async () => {
-                  if(window.confirm("정말 삭제하시겠습니까?")) {
-                    setIsDeleting(true);
-                    await onDelete(link.id);
-                    setIsDeleting(false);
-                  }
-                }}
+                onClick={() => onDelete(link.id, link.title)}
                 className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                 title="삭제하기"
               >
-                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                <Trash2 className="w-4 h-4" />
               </Button>
             </div>
           </div>

@@ -17,6 +17,7 @@ function LinkCardItem({ linkItem, onDelete }: { linkItem: LinkItemData; onDelete
   const [editUrl, setEditUrl] = useState(linkItem.url);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState("");
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   const handleSave = async () => {
     setError("");
@@ -64,16 +65,32 @@ function LinkCardItem({ linkItem, onDelete }: { linkItem: LinkItemData; onDelete
     setError("");
   };
 
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isEditing && !isUpdating && containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        handleSave();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isEditing, isUpdating, editTitle, editUrl]);
+
   return (
     <Card className="group border border-slate-200/60 dark:border-zinc-850 bg-card hover:shadow-sm hover:-translate-y-0.5 hover:border-slate-300/80 dark:hover:border-zinc-750 transition-all duration-200">
       <CardContent className="p-3.5 flex flex-col gap-2">
         {isEditing ? (
-          <div className="flex flex-col gap-3 w-full py-1">
+          <div ref={containerRef} className="flex flex-col gap-3 w-full py-1">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">링크 제목</label>
               <Input 
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSave();
+                  }
+                }}
                 placeholder="예: 나의 인스타그램"
                 className="h-9 text-sm focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7]"
               />
@@ -83,6 +100,12 @@ function LinkCardItem({ linkItem, onDelete }: { linkItem: LinkItemData; onDelete
               <Input 
                 value={editUrl}
                 onChange={(e) => setEditUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSave();
+                  }
+                }}
                 placeholder="https://example.com"
                 className="h-9 text-sm font-mono focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7]"
               />
@@ -209,6 +232,7 @@ export default function MyPage() {
     const finalUrl = trimmedUrl.startsWith("http") ? trimmedUrl : `https://${trimmedUrl}`;
 
     try {
+      await new Promise(resolve => setTimeout(resolve, 500));
       const linksRef = collection(db, "users", "anonymous", "links");
       await addDoc(linksRef, {
         title: trimmedTitle,
@@ -238,11 +262,12 @@ export default function MyPage() {
     if (!linkToDelete) return;
     setIsDeleting(true);
     try {
+      await new Promise(resolve => setTimeout(resolve, 500));
       await deleteDoc(doc(db, "users", "anonymous", "links", linkToDelete.id));
       setDeleteModalOpen(false);
       setLinkToDelete(null);
     } catch (err) {
-      console.error("Error deleting link:", err);
+      console.error(err);
       alert("링크 삭제에 실패했습니다.");
     } finally {
       setIsDeleting(false);
@@ -287,25 +312,12 @@ export default function MyPage() {
         </section>
 
         {/* 2. 중간: 폼 (다이얼로그) */}
-        <section className="flex justify-center">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger className="w-full max-w-sm h-12 bg-[#5b5fc7]/10 hover:bg-[#5b5fc7]/20 text-[#5b5fc7] border border-[#5b5fc7]/30 border-dashed rounded-xl flex items-center justify-center gap-2 transition-all">
-              <Plus className="w-5 h-5" />
-              <span className="font-semibold">새로운 링크 추가하기</span>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="text-center text-lg font-bold text-slate-800 dark:text-slate-100">
-                  새로운 링크 정보 입력
-                </DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleAddLink} className="flex flex-col gap-4 py-2">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="title" className="text-sm font-semibold text-slate-700 dark:text-zinc-300">
-                    링크 제목
-                  </label>
+        <section className="flex justify-center z-10 relative">
+          {isDialogOpen ? (
+            <Card className="w-full border bg-card shadow-sm">
+              <CardContent className="p-4 flex flex-col gap-2">
+                <form onSubmit={handleAddLink} className="flex flex-col gap-2">
                   <Input
-                    id="title"
                     type="text"
                     placeholder="예: 나의 인스타그램, 개인 블로그 등"
                     value={title}
@@ -313,15 +325,10 @@ export default function MyPage() {
                       setTitle(e.target.value);
                       setError("");
                     }}
-                    className="focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7]"
+                    className={`font-medium text-center focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7] ${error && !title.trim() ? 'border-destructive' : ''}`}
+                    autoFocus
                   />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="url" className="text-sm font-semibold text-slate-700 dark:text-zinc-300">
-                    주소 (URL)
-                  </label>
                   <Input
-                    id="url"
                     type="text"
                     placeholder="https://example.com"
                     value={url}
@@ -329,25 +336,34 @@ export default function MyPage() {
                       setUrl(e.target.value);
                       setError("");
                     }}
-                    className="focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7]"
+                    className={`text-xs font-mono text-center focus-visible:ring-[#5b5fc7] focus-visible:border-[#5b5fc7] ${error && !url.trim() ? 'border-destructive' : ''}`}
                   />
-                </div>
-                {error && (
-                  <p className="text-xs font-medium text-destructive mt-0.5">
-                    {error}
-                  </p>
-                )}
-                <Button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="w-full bg-[#5b5fc7] hover:bg-[#4c50ab] active:scale-[0.98] text-white font-semibold py-2.5 rounded-lg shadow-sm transition-all flex items-center justify-center gap-1.5 mt-2"
-                >
-                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  <span>{isSubmitting ? "추가 중..." : "링크 추가하기"}</span>
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  {error && (
+                    <p className="text-xs font-medium text-destructive mt-0.5 text-center">
+                      {error}
+                    </p>
+                  )}
+                  <div className="flex gap-2 justify-center mt-1">
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setIsDialogOpen(false); setError(""); }} disabled={isSubmitting}>
+                      취소
+                    </Button>
+                    <Button type="submit" size="sm" disabled={isSubmitting} className="bg-[#5b5fc7] hover:bg-[#4c50ab] text-white">
+                      {isSubmitting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+                      {isSubmitting ? "추가 중" : "추가하기"}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          ) : (
+            <button 
+              onClick={() => { setIsDialogOpen(true); setTitle(""); setUrl(""); setError(""); }}
+              className="w-full h-12 bg-[#5b5fc7]/10 hover:bg-[#5b5fc7]/20 text-[#5b5fc7] border border-[#5b5fc7]/30 border-dashed rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="font-semibold">새로운 링크 추가하기</span>
+            </button>
+          )}
         </section>
 
         {/* 3. 하단: 목록 */}
@@ -390,12 +406,12 @@ export default function MyPage() {
           
           <div className="flex flex-col items-center justify-center gap-3 py-4 text-center">
             {linkToDelete && (
-              <div className="bg-slate-100 dark:bg-zinc-800 px-4 py-2 rounded-md w-full border border-slate-200 dark:border-zinc-700">
-                <span className="font-semibold text-sm">{linkToDelete.title}</span>
-              </div>
+              <p className="text-sm text-foreground">
+                <span className="font-bold">{linkToDelete.title}</span> 링크를 삭제 합니다.
+              </p>
             )}
-            <p className="text-destructive font-bold text-sm mt-2">
-              경고 : 이 작업은 되돌릴 수 없습니다.
+            <p className="text-destructive font-bold text-sm mt-1">
+              이 작업은 되돌릴 수 없습니다.
             </p>
           </div>
 
