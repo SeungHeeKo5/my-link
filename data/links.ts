@@ -3,6 +3,7 @@ export interface LinkItemData {
   title: string;
   url: string;
   icon: string;
+  updateAt?: number;
 }
 
 export const dummyLinks: LinkItemData[] = [

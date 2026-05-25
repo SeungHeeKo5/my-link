@@ -25,8 +25,9 @@ import Link from "next/link";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { db, auth, googleProvider } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, deleteDoc, doc, updateDoc, setDoc } from "firebase/firestore";
+import { signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
 
 const linkFormSchema = z.object({
   title: z.string().min(1, { message: "제목은 필수 입력입니다." }),
@@ -39,6 +40,7 @@ interface LinkItem {
   title: string;
   url: string;
   icon: string;
+  updateAt?: number;
 }
 
 interface ProfileData {
@@ -62,9 +64,23 @@ export default function MyLinkApp() {
   const [profile, setProfile] = useState<ProfileData>(initialProfile);
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [isMounted, setIsMounted] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    const linksRef = collection(db, "users", "anonymous", "links");
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setLinks([]);
+      return;
+    }
+    const linksRef = collection(db, "users", user.uid, "links");
     const q = query(linksRef, orderBy("createdAt", "desc"));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -75,6 +91,7 @@ export default function MyLinkApp() {
           title: data.title,
           url: data.url,
           icon: data.icon || "LinkIcon",
+          updateAt: data.updateAt ? data.updateAt.toMillis() : undefined,
         };
       });
       setLinks(fetchedLinks);
@@ -82,9 +99,41 @@ export default function MyLinkApp() {
       console.error("Error fetching links:", error);
     });
     
-    setIsMounted(true);
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const userDocRef = doc(db, "users", user.uid);
+    const unsubscribe = onSnapshot(userDocRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setProfile({
+          name: data.name || "",
+          englishName: data.englishName || "",
+          dob: data.dob || "",
+          about: data.about || "",
+          avatarUrl: data.avatarUrl || user.photoURL || initialProfile.avatarUrl,
+        });
+      } else {
+        const newProfile: ProfileData = {
+          name: user.email?.split('@')[0] || "User",
+          englishName: "",
+          dob: "",
+          about: "안녕하세요! 프로필을 설정해주세요.",
+          avatarUrl: user.photoURL || initialProfile.avatarUrl,
+        };
+        setDoc(userDocRef, newProfile).catch(err => console.error("Error creating profile:", err));
+      }
+    }, (error) => {
+      console.error("Error fetching profile:", error);
+    });
 
     return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    setIsMounted(true);
   }, []);
 
   // --- Add Link Modal State ---
@@ -140,7 +189,7 @@ export default function MyLinkApp() {
 
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
-      const linksRef = collection(db, "users", "anonymous", "links");
+      const linksRef = collection(db, "users", user!.uid, "links");
       await addDoc(linksRef, {
         title: data.title.trim(),
         url: finalUrl,
@@ -157,7 +206,23 @@ export default function MyLinkApp() {
     }
   };
 
-  if (!isMounted) {
+  const handleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error("Login failed", error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
+  if (!isMounted || authLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <div className="w-8 h-8 border-4 border-[#5b5fc7] border-t-transparent rounded-full animate-spin"></div>
@@ -174,7 +239,19 @@ export default function MyLinkApp() {
           <Terminal className="w-4 h-4" />
           <span>MyLink</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {user ? (
+            <>
+              <span className="text-sm font-medium">{user.email?.split('@')[0]} 님</span>
+              <Button variant="outline" size="sm" onClick={handleLogout} className="text-xs">
+                로그아웃
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" onClick={handleLogin} className="text-xs bg-[#5b5fc7] hover:bg-[#4c50ab] text-white">
+              Google로 로그인
+            </Button>
+          )}
           <Link 
             href="/mypage" 
             className="hidden sm:inline-flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 text-[#5b5fc7] font-semibold px-3 py-1.5 rounded-full border border-slate-200 dark:border-zinc-700 transition-colors shadow-sm"
@@ -187,69 +264,81 @@ export default function MyLinkApp() {
 
       {/* Main Content */}
       <main className="w-full max-w-md mx-auto px-4 flex flex-col gap-6 mt-6 items-center">
-        
-        {/* Profile Section */}
-        <section className="w-full flex flex-col items-center text-center mt-2">
-          <Card className="w-full overflow-hidden border shadow-sm bg-card">
-            <div className="h-28 bg-muted w-full relative flex items-start p-4">
-              <Badge variant="outline" className="bg-background/50 backdrop-blur-sm">
-                <Code className="w-3 h-3 mr-1" />
-                Developer
-              </Badge>
+        {!user ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center gap-4 w-full">
+            <div className="w-16 h-16 bg-slate-100 dark:bg-zinc-800 rounded-full flex items-center justify-center">
+              <LinkIcon className="w-8 h-8 text-muted-foreground" />
             </div>
-
-            <div className="px-6 pb-8 -mt-12 flex flex-col items-center">
-              <div className="relative group mb-4">
-                <Avatar className="w-24 h-24 border-4 border-background bg-muted">
-                  <AvatarImage src={profile.avatarUrl} alt="Avatar" />
-                  <AvatarFallback className="text-xl">SH</AvatarFallback>
-                </Avatar>
-                <div className="absolute inset-0 bg-background/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer">
-                  <Pencil className="w-5 h-5" />
+            <h2 className="text-xl font-bold">로그인 이후에 사용할 수 있습니다</h2>
+            <p className="text-sm text-muted-foreground">나만의 링크를 관리하려면 로그인이 필요합니다.</p>
+            <Button onClick={handleLogin} className="mt-4 bg-[#5b5fc7] hover:bg-[#4c50ab] text-white">
+              Google로 로그인하기
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Profile Section */}
+            <section className="w-full flex flex-col items-center text-center mt-2">
+              <Card className="w-full overflow-hidden border shadow-sm bg-card">
+                <div className="h-28 bg-muted w-full relative flex items-start p-4">
+                  <Badge variant="outline" className="bg-background/50 backdrop-blur-sm">
+                    <Code className="w-3 h-3 mr-1" />
+                    Developer
+                  </Badge>
                 </div>
-              </div>
 
-              <InlineEdit
-                value={profile.name}
-                onSave={async (val) => {
-                  await new Promise(resolve => setTimeout(resolve, 400));
-                  setProfile(prev => ({ ...prev, name: val }));
-                }}
-                textClass="text-2xl font-bold tracking-tight mb-1"
-              />
-              
-              <InlineEdit
-                value={profile.englishName}
-                onSave={async (val) => {
-                  await new Promise(resolve => setTimeout(resolve, 400));
-                  setProfile(prev => ({ ...prev, englishName: val }));
-                }}
-                textClass="text-sm text-muted-foreground mb-3"
-              />
-              
-              <InlineEdit
-                value={profile.dob}
-                onSave={async (val) => {
-                  await new Promise(resolve => setTimeout(resolve, 400));
-                  setProfile(prev => ({ ...prev, dob: val }));
-                }}
-                textClass="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded-md mb-6"
-              />
+                <div className="px-6 pb-8 -mt-12 flex flex-col items-center">
+                  <div className="relative group mb-4">
+                    <Avatar className="w-24 h-24 border-4 border-background bg-muted">
+                      <AvatarImage src={profile.avatarUrl} alt="Avatar" />
+                      <AvatarFallback className="text-xl">SH</AvatarFallback>
+                    </Avatar>
+                    <div className="absolute inset-0 bg-background/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer">
+                      <Pencil className="w-5 h-5" />
+                    </div>
+                  </div>
 
-              <div className="w-full">
-                <InlineEdit
-                  value={profile.about}
-                  onSave={async (val) => {
-                    await new Promise(resolve => setTimeout(resolve, 400));
-                    setProfile(prev => ({ ...prev, about: val }));
-                  }}
-                  textClass="text-sm leading-relaxed text-foreground whitespace-pre-wrap text-center"
-                  multiline
-                />
-              </div>
-            </div>
-          </Card>
-        </section>
+                  <InlineEdit
+                    value={profile.name}
+                    onSave={async (val) => {
+                      await new Promise(resolve => setTimeout(resolve, 400));
+                      await updateDoc(doc(db, "users", user!.uid), { name: val });
+                    }}
+                    textClass="text-2xl font-bold tracking-tight mb-1"
+                  />
+                  
+                  <InlineEdit
+                    value={profile.englishName}
+                    onSave={async (val) => {
+                      await new Promise(resolve => setTimeout(resolve, 400));
+                      await updateDoc(doc(db, "users", user!.uid), { englishName: val });
+                    }}
+                    textClass="text-sm text-muted-foreground mb-3"
+                  />
+                  
+                  <InlineEdit
+                    value={profile.dob}
+                    onSave={async (val) => {
+                      await new Promise(resolve => setTimeout(resolve, 400));
+                      await updateDoc(doc(db, "users", user!.uid), { dob: val });
+                    }}
+                    textClass="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded-md mb-6"
+                  />
+
+                  <div className="w-full">
+                    <InlineEdit
+                      value={profile.about}
+                      onSave={async (val) => {
+                        await new Promise(resolve => setTimeout(resolve, 400));
+                        await updateDoc(doc(db, "users", user!.uid), { about: val });
+                      }}
+                      textClass="text-sm leading-relaxed text-foreground whitespace-pre-wrap text-center"
+                      multiline
+                    />
+                  </div>
+                </div>
+              </Card>
+            </section>
 
         {/* Top Add Link Button (Moved Below Profile) */}
         <section className="w-full flex justify-center z-10 relative">
@@ -311,6 +400,8 @@ export default function MyLinkApp() {
             />
           ))}
         </section>
+          </>
+        )}
       </main>
 
       {/* Delete Confirmation Modal */}

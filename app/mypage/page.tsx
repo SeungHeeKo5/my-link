@@ -1,17 +1,18 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Link as LinkIcon, Plus, Trash2, ExternalLink, ArrowLeft, Globe, Loader2, Pencil } from "lucide-react";
+import { Link as LinkIcon, Plus, Trash2, ExternalLink, ArrowLeft, Globe, Loader2, Pencil, Save } from "lucide-react";
 import { LinkItemData } from "@/data/links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import Link from "next/link";
-import { db } from "@/lib/firebase";
+import { db, auth, googleProvider } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
 
-function LinkCardItem({ linkItem, onDelete }: { linkItem: LinkItemData; onDelete: (id: string, title: string) => void }) {
+function LinkCardItem({ linkItem, onDelete, uid }: { linkItem: LinkItemData; onDelete: (id: string, title: string) => void; uid: string }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(linkItem.title);
   const [editUrl, setEditUrl] = useState(linkItem.url);
@@ -43,7 +44,7 @@ function LinkCardItem({ linkItem, onDelete }: { linkItem: LinkItemData; onDelete
     const finalUrl = trimmedUrl.startsWith("http") ? trimmedUrl : `https://${trimmedUrl}`;
 
     try {
-      const linkRef = doc(db, "users", "anonymous", "links", linkItem.id);
+      const linkRef = doc(db, "users", uid, "links", linkItem.id);
       await updateDoc(linkRef, {
         title: trimmedTitle,
         url: finalUrl,
@@ -184,11 +185,25 @@ export default function MyPage() {
   const [linkToDelete, setLinkToDelete] = useState<{ id: string, title: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Firestore realtime listener
   useEffect(() => {
-    setIsMounted(true);
+    if (!user) {
+      setLinks([]);
+      return;
+    }
     
-    const linksRef = collection(db, "users", "anonymous", "links");
+    const linksRef = collection(db, "users", user.uid, "links");
     const q = query(linksRef, orderBy("createdAt", "desc"));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -197,6 +212,7 @@ export default function MyPage() {
         title: doc.data().title,
         url: doc.data().url,
         icon: doc.data().icon || "LinkIcon",
+        updateAt: doc.data().updateAt ? doc.data().updateAt.toMillis() : undefined,
       }));
       setLinks(fetchedLinks);
     }, (error) => {
@@ -204,6 +220,10 @@ export default function MyPage() {
     });
 
     return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    setIsMounted(true);
   }, []);
 
   const handleAddLink = async (e: React.FormEvent) => {
@@ -233,7 +253,7 @@ export default function MyPage() {
 
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
-      const linksRef = collection(db, "users", "anonymous", "links");
+      const linksRef = collection(db, "users", user!.uid, "links");
       await addDoc(linksRef, {
         title: trimmedTitle,
         url: finalUrl,
@@ -263,7 +283,7 @@ export default function MyPage() {
     setIsDeleting(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
-      await deleteDoc(doc(db, "users", "anonymous", "links", linkToDelete.id));
+      await deleteDoc(doc(db, "users", user!.uid, "links", linkToDelete.id));
       setDeleteModalOpen(false);
       setLinkToDelete(null);
     } catch (err) {
@@ -274,7 +294,23 @@ export default function MyPage() {
     }
   };
 
-  if (!isMounted) {
+  const handleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error("Login failed", error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
+  if (!isMounted || authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-[#5b5fc7] border-t-transparent rounded-full animate-spin"></div>
@@ -290,13 +326,41 @@ export default function MyPage() {
           <ArrowLeft className="w-4 h-4" />
           <span>메인으로</span>
         </Link>
-        <span className="text-xs bg-slate-100 dark:bg-zinc-800 text-[#5b5fc7] font-semibold px-2 py-0.5 rounded-full border border-slate-200 dark:border-zinc-700">
-          Edit Mode
-        </span>
+        <div className="flex items-center gap-3">
+          {user ? (
+            <>
+              <span className="text-sm font-medium">{user.email?.split('@')[0]} 님</span>
+              <Button variant="outline" size="sm" onClick={handleLogout} className="text-xs">
+                로그아웃
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" onClick={handleLogin} className="text-xs bg-[#5b5fc7] hover:bg-[#4c50ab] text-white">
+              Google로 로그인
+            </Button>
+          )}
+          <span className="text-xs bg-slate-100 dark:bg-zinc-800 text-[#5b5fc7] font-semibold px-2 py-0.5 rounded-full border border-slate-200 dark:border-zinc-700">
+            Edit Mode
+          </span>
+        </div>
       </header>
 
       {/* Main Container */}
       <main className="w-full max-w-md mx-auto px-4 mt-8 flex flex-col gap-8">
+        {!user ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center gap-4 w-full">
+            <div className="w-16 h-16 bg-slate-100 dark:bg-zinc-800 rounded-full flex items-center justify-center">
+              <LinkIcon className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-bold">로그인 이후에 사용할 수 있습니다</h2>
+            <p className="text-sm text-muted-foreground">나만의 링크를 관리하려면 로그인이 필요합니다.</p>
+            <Button onClick={handleLogin} className="mt-4 bg-[#5b5fc7] hover:bg-[#4c50ab] text-white">
+              Google로 로그인하기
+            </Button>
+          </div>
+        ) : (
+          <>
+
         
         {/* 1. 상단: 제목 */}
         <section className="text-center flex flex-col items-center gap-2">
@@ -388,11 +452,14 @@ export default function MyPage() {
                   key={linkItem.id} 
                   linkItem={linkItem} 
                   onDelete={requestDelete} 
+                  uid={user!.uid}
                 />
               ))}
             </div>
           )}
         </section>
+          </>
+        )}
       </main>
 
       {/* Delete Confirmation Modal */}
