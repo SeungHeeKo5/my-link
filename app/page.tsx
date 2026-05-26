@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { Link as LinkIcon, Plus, Trash2, ExternalLink, Globe, Loader2, Pencil, Save, Copy, BarChart3, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { LinkItemData } from "@/data/links";
