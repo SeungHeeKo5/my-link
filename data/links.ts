@@ -4,6 +4,7 @@ export interface LinkItemData {
   url: string;
   icon: string;
   updateAt?: number;
+  clickCount?: number;
 }
 
 export const dummyLinks: LinkItemData[] = [

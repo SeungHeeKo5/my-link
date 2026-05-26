@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 사용자 프로필 (앞서 users/{userId} 경로에 저장되도록 구성했습니다)
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+      
+      // 사용자의 링크 목록 (users/{userId}/links/{linkId})
+      match /links/{linkId} {
+        allow read: if true;
+        allow create, delete: if request.auth != null && request.auth.uid == userId;
+        allow update: if (request.auth != null && request.auth.uid == userId) || 
+                         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clickCount']) && 
+                          request.resource.data.clickCount == resource.data.get('clickCount', 0) + 1);
+      }
+    }
+  }
+}
