@@ -51,16 +51,16 @@ export default function LandingPage() {
       </div>
       
       <div className="text-center max-w-sm w-full bg-card border shadow-sm rounded-2xl p-8">
-        <h2 className="text-xl font-bold mb-3">로그인해주세요</h2>
+        <h2 className="text-xl font-bold mb-3">환영합니다</h2>
         <p className="text-sm text-muted-foreground mb-8">
-          나만의 멋진 링크 트리를 만들고 관리하려면 로그인이 필요합니다.
+          마이링크는 개인 url을 관리하는 서비스입니다.
         </p>
         
         <Button 
           onClick={handleLogin} 
           className="w-full bg-[#5b5fc7] hover:bg-[#4c50ab] text-white rounded-full py-6 text-base font-semibold shadow-md hover:shadow-lg transition-all"
         >
-          Google로 로그인하기 <ArrowRight className="ml-2 w-4 h-4" />
+          구글로 로그인하기 <ArrowRight className="ml-2 w-4 h-4" />
         </Button>
       </div>
     </div>
